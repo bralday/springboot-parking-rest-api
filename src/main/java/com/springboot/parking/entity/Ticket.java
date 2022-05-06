@@ -46,5 +46,9 @@ public class Ticket {
     @JoinColumn(name = "slot_id", nullable = false)
     private Slot slot;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "vehicle_id", nullable = false)
+    private Vehicle vehicle;
+
 
 }
