@@ -3,12 +3,15 @@ package com.springboot.parking.service.impl;
 
 import com.springboot.parking.entity.Slot;
 import com.springboot.parking.entity.Ticket;
+import com.springboot.parking.entity.Vehicle;
 import com.springboot.parking.enums.SlotSize;
 import com.springboot.parking.exception.AvailableSlotNotFoundException;
 import com.springboot.parking.exception.ResourceNotFoundException;
 import com.springboot.parking.payload.TicketDto;
+import com.springboot.parking.payload.VehicleDto;
 import com.springboot.parking.repository.SlotRepository;
 import com.springboot.parking.repository.TicketRepository;
+import com.springboot.parking.repository.VehicleRepository;
 import com.springboot.parking.service.TicketService;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
@@ -16,7 +19,6 @@ import org.springframework.stereotype.Service;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
-import java.util.Arrays;
 import java.util.List;
 
 
@@ -25,77 +27,53 @@ public class TicketServiceImpl implements TicketService {
 
     private TicketRepository ticketRepository;
     private SlotRepository slotRepository;
+    private VehicleRepository vehicleRepository;
     private ModelMapper mapper;
 
-    public TicketServiceImpl(TicketRepository ticketRepository, SlotRepository slotRepository, ModelMapper mapper) {
+    public TicketServiceImpl(TicketRepository ticketRepository, SlotRepository slotRepository, VehicleRepository vehicleRepository, ModelMapper mapper) {
         this.ticketRepository = ticketRepository;
         this.slotRepository = slotRepository;
+        this.vehicleRepository = vehicleRepository;
         this.mapper = mapper;
     }
 
     @Override
-    public TicketDto park(TicketDto ticketDto) {
+    public TicketDto park(VehicleDto vehicleDto){
+        Vehicle newVehicle = mapToVehicleEntity(vehicleDto); // New Vehicle transaction
+        Vehicle vehicle;
+        boolean isReturnee = false;
+        // Check if vehicle is registered in db, if not save.
+        if(vehicleRepository.existsByLicenseNumber(newVehicle.getLicenseNumber())){
+            vehicle = vehicleRepository.findByLicenseNumber(vehicleDto.getLicenseNumber());
 
-        //TODO check if returnee
+            // Check if tickets with vehicle exist, list all tickets and get the latest one.
+            if (ticketRepository.existsByLicenseNumber(vehicle.getLicenseNumber())){
+                List<Ticket> tickets = ticketRepository.findByLicenseNumber(vehicle.getLicenseNumber());
+                Ticket latestTicket = tickets.get(tickets.size()-1);
+                latestTicket.setEntryPoint(newVehicle.getEntryPoint()); // Set new entry point of the vehicle
 
-        Ticket ticket = mapToEntity(ticketDto);
-        System.out.println("Entry point: " + ticket.getEntryPoint());
-        System.out.println("Size: " + ticket.getVehicleSize());
-
-        // find all slots within entry point and size
-        List<Slot> nearSlots = slotRepository.findByEntryPointAndSlotSize(ticket.getEntryPoint(), ticket.getVehicleSize());
-                for(Slot slot : nearSlots){
-
-                    if (slot.getSlotSize().toString().equals(ticket.getVehicleSize()) && !slot.isOccupied()){
-                        slot.setOccupied(true);
-                        this.slotRepository.save(slot);
-
-                        // Add additional ticket details
-                        ticket.setTimeIn(LocalDateTime.now());
-                        ticket.setSlot(slot);
-
-                        // Save ticket to db
-                        Ticket updatedTicket = this.ticketRepository.save(ticket);
-                        return mapToDto(updatedTicket);
-
-                    }else{
-                        continue;
-                    }
+                // Check if the latest one is not yet pass an hour.
+                if(checkIfRecent(latestTicket.getTimeOut())){
+                    isReturnee = true;
+                    return generateTicket(latestTicket,vehicle, isReturnee);
                 }
-
-        /* If enhanced for loop ends and still none, check all other slots regardless of entry point
-         * Also check for slots where it can fit
-         */
-        List<Slot> otherSlots = slotRepository.findBySlotSize(ticket.getVehicleSize());
-        for(Slot slot : otherSlots){
-            System.out.println("Other Slot:");
-            System.out.println("SlotSize: " + slot.getSlotSize());
-            System.out.println("Entry Point: " + slot.getEntryPoint());
-            System.out.println("Occupied: " + slot.isOccupied());
-            if (((slot.getSlotSize().equals(ticket.getVehicleSize()))
-                    || (ticket.getVehicleSize().equals(SlotSize.SP.name()) && slot.getSlotSize().equals(SlotSize.MP.name()))
-                    || (ticket.getVehicleSize().equals(SlotSize.SP.name()) && slot.getSlotSize().equals(SlotSize.LP.name()))
-                    || (ticket.getVehicleSize()==SlotSize.MP.name() && slot.getSlotSize().equals(SlotSize.LP.name())))
-                    && !slot.isOccupied()){
-
-                slot.setOccupied(true);
-                this.slotRepository.save(slot);
-
-                // Add additional ticket details
-                ticket.setTimeIn(LocalDateTime.now());
-                ticket.setEntryPoint(slot.getEntryPoint());
-                ticket.setSlot(slot);
-
-                // Save ticket to db
-                Ticket updatedTicket = this.ticketRepository.save(ticket);
-                return mapToDto(updatedTicket);
-
-            }else{
-                continue;
             }
+        }else{
+            vehicle = this.vehicleRepository.save(newVehicle);
         }
 
-        throw new AvailableSlotNotFoundException();
+
+
+
+        // if not qualified as returnee, generate a new ticket
+        Ticket newTicket = new Ticket();
+        newTicket.setEntryPoint(newVehicle.getEntryPoint()); //entry point for new transaction
+        newTicket.setVehicleSize(vehicle.getVehicleSize());
+        newTicket.setLicenseNumber(vehicle.getLicenseNumber());
+
+
+        return generateTicket(newTicket,vehicle, isReturnee);
+
     }
 
     @Override
@@ -134,7 +112,7 @@ public class TicketServiceImpl implements TicketService {
         }
 
 
-        // default if conditions above are not satisfied
+        // if conditions above are not satisfied
         ticket.setTimeOut(currentTime);
         ticket.setAmountDue(computeHourly(ticket.getTimeIn(),currentTime,slot.getFlatRate(),slot.getPerHour()));
 
@@ -155,6 +133,21 @@ public class TicketServiceImpl implements TicketService {
         return ticket;
     }
 
+    private VehicleDto mapToVehicleDto(Vehicle vehicle){
+
+        VehicleDto vehicleDto = mapper.map(vehicle, VehicleDto.class);
+
+        return vehicleDto;
+    }
+
+    // Convert DTO to entity
+    private Vehicle mapToVehicleEntity (VehicleDto vehicleDto){
+
+        Vehicle vehicle = mapper.map(vehicleDto, Vehicle.class);
+
+        return vehicle;
+    }
+
     //convert entity (post) to DTO
     private TicketDto mapToDto(Ticket ticket){
 
@@ -163,17 +156,84 @@ public class TicketServiceImpl implements TicketService {
         return ticketDto;
     }
 
-    // Check if a vehicle leaving the parking complex returned within one hour
-    private boolean checkIfRecent(TicketDto ticketDto){
-        Boolean isExisting = ticketRepository.existsByLicenseNumber(ticketDto.getLicenseNumber());
-        LocalDateTime timeLimit = ticketDto.getTimeOut().plusHours(1);
+    private TicketDto generateTicket(Ticket ticket, Vehicle vehicle, boolean isReturnee){
+        // find all slots within entry point and size
+        List<Slot> nearSlots = slotRepository.findByEntryPointAndSlotSize(ticket.getEntryPoint(), ticket.getVehicleSize());
+        for(Slot slot : nearSlots){
 
-        if(isExisting){
-            if(LocalDateTime.now().isBefore(timeLimit)){
-                return true;
+            if (slot.getSlotSize().toString().equals(ticket.getVehicleSize()) && !slot.isOccupied()){
+
+
+                // Add additional ticket details
+                // If not a 1 hour returnee, set time in as now.
+                if(!isReturnee){
+                    ticket.setTimeIn(LocalDateTime.now());
+                }
+                ticket.setSlot(slot);
+                ticket.setVehicle(vehicle);
+
+                // Save ticket to db
+                Ticket updatedTicket = this.ticketRepository.save(ticket);
+
+                slot.setOccupied(true);
+                slot.setOccupant(vehicle.getLicenseNumber());
+                this.slotRepository.save(slot);
+                return mapToDto(updatedTicket);
+
+            }else{
+                continue;
             }
         }
 
+        /* If enhanced for loop ends and still none, check all other slots regardless of entry point
+         * Also check for slots where it can fit
+         */
+        List<Slot> otherSlots = slotRepository.findBySlotSize(ticket.getVehicleSize());
+        for(Slot slot : otherSlots){
+            /*System.out.println("Other Slot:");
+            System.out.println("SlotSize: " + slot.getSlotSize());
+            System.out.println("Entry Point: " + slot.getEntryPoint());
+            System.out.println("Occupied: " + slot.isOccupied());*/
+            if (((slot.getSlotSize().equals(ticket.getVehicleSize()))
+                    || (ticket.getVehicleSize().equals(SlotSize.SP.name()) && slot.getSlotSize().equals(SlotSize.MP.name()))
+                    || (ticket.getVehicleSize().equals(SlotSize.SP.name()) && slot.getSlotSize().equals(SlotSize.LP.name()))
+                    || (ticket.getVehicleSize()==SlotSize.MP.name() && slot.getSlotSize().equals(SlotSize.LP.name())))
+                    && !slot.isOccupied()){
+
+
+
+                // Add additional ticket details
+                // If not a 1 hour returnee, set time in as now.
+                if(!isReturnee){
+                    ticket.setTimeIn(LocalDateTime.now());
+                }
+                ticket.setEntryPoint(slot.getEntryPoint()); //set new entry point of the slot
+                ticket.setSlot(slot);
+                ticket.setVehicle(vehicle);
+
+                // Save ticket to db
+                Ticket updatedTicket = this.ticketRepository.save(ticket);
+
+                slot.setOccupied(true);
+                slot.setOccupant(vehicle.getLicenseNumber());
+                this.slotRepository.save(slot);
+                return mapToDto(updatedTicket);
+
+            }else{
+                continue;
+            }
+        }
+
+        throw new AvailableSlotNotFoundException();
+    }
+
+    // Check if a vehicle leaving the parking complex returned within one hour
+    private boolean checkIfRecent(LocalDateTime exitDate){
+        LocalDateTime timeLimit = exitDate.plusHours(1);
+
+            if(LocalDateTime.now().isBefore(timeLimit) || LocalDateTime.now().isEqual(timeLimit)) {
+                return true;
+            }
         return false;
     }
 

@@ -36,6 +36,9 @@ public class Slot {
     @Column(name = "perHour", nullable = false)
     private BigDecimal perHour;
 
+    @Column(name = "occupant", nullable = true)
+    private String occupant;
+
     @Column(name = "isOccupied", nullable = true, columnDefinition = "boolean default false")
     private boolean isOccupied;
 

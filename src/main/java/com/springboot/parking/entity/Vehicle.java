@@ -6,35 +6,35 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import javax.persistence.*;
+import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.HashSet;
 import java.util.Set;
 
-//@Data // Lombok - Generates getters, setters, and toString (via annotations)
 @AllArgsConstructor // Generates all args constructor via Lombok
 @NoArgsConstructor // Generates no args constructor via Lombok
 @Getter // added these 2 instead of @Data to prevent stackoverflow error caused by toString()
 @Setter
 
 @Entity
-@Table(
-        name = "parkinglots",
-        uniqueConstraints = {@UniqueConstraint(columnNames = {"lotname"})}
-)
-public class ParkingLot {
+@Table(name = "vehicles")
+public class Vehicle {
     @Id
     @GeneratedValue(
             strategy = GenerationType.IDENTITY
     )
     private Long id;
 
-    @Column(name = "lotname", nullable = false)
-    private String lotName;
+    @Column(name = "licenseNumber", nullable = false)
+    private String licenseNumber;
 
-    @Column(name = "location", nullable = false)
-    private String location;
+    @Column(name = "vehicleSize", nullable = false)
+    private String vehicleSize;
 
-    @OneToMany(mappedBy = "parkingLot", cascade = CascadeType.ALL, orphanRemoval = true)
-    private Set<Slot> slots = new HashSet<>();
+    @Column(name = "entryPoint", nullable = false)
+    private String entryPoint;
 
+    @OneToMany(mappedBy = "vehicle", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<Ticket> tickets = new HashSet<>();
 
 }
