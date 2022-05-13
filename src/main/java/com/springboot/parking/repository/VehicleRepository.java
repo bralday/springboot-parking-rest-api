@@ -1,6 +1,5 @@
 package com.springboot.parking.repository;
 
-import com.springboot.parking.entity.Ticket;
 import com.springboot.parking.entity.Vehicle;
 import org.springframework.data.jpa.repository.JpaRepository;
 

@@ -8,11 +8,11 @@ import lombok.Setter;
 import javax.persistence.*;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.Date;
 
-@AllArgsConstructor // Generates all args constructor via Lombok
-@NoArgsConstructor // Generates no args constructor via Lombok
-@Getter // added these 2 instead of @Data to prevent stackoverflow error caused by toString()
+
+@AllArgsConstructor
+@NoArgsConstructor
+@Getter
 @Setter
 
 @Entity
@@ -49,6 +49,10 @@ public class Ticket {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "vehicle_id", nullable = false)
     private Vehicle vehicle;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "parking_lot_id", nullable = false)
+    private ParkingLot parkingLot;
 
 
 }

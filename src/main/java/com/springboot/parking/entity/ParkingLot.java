@@ -9,10 +9,10 @@ import javax.persistence.*;
 import java.util.HashSet;
 import java.util.Set;
 
-//@Data // Lombok - Generates getters, setters, and toString (via annotations)
-@AllArgsConstructor // Generates all args constructor via Lombok
-@NoArgsConstructor // Generates no args constructor via Lombok
-@Getter // added these 2 instead of @Data to prevent stackoverflow error caused by toString()
+
+@AllArgsConstructor
+@NoArgsConstructor
+@Getter
 @Setter
 
 @Entity
@@ -36,5 +36,7 @@ public class ParkingLot {
     @OneToMany(mappedBy = "parkingLot", cascade = CascadeType.ALL, orphanRemoval = true)
     private Set<Slot> slots = new HashSet<>();
 
+    @OneToMany(mappedBy = "parkingLot", cascade = CascadeType.ALL, orphanRemoval = true)
+    private Set<Ticket> tickets = new HashSet<>();
 
 }
