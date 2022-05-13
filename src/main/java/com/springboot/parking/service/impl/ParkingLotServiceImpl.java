@@ -31,7 +31,7 @@ public class ParkingLotServiceImpl implements ParkingLotService {
         // Save to database using .save()
         ParkingLot newParkingLot = this.parkingLotRepository.save(parkingLot);
 
-        //convert entity (post) to DTO using private method below.
+        //convert entity to DTO using private method below.
         ParkingLotDto parkingLotResponse = mapToDto(newParkingLot);
 
         return parkingLotResponse;
@@ -59,8 +59,6 @@ public class ParkingLotServiceImpl implements ParkingLotService {
         parkingLot.setLocation(parkingLotDto.getLocation());
         parkingLot.setLotName(parkingLotDto.getLotName());
 
-        // Save to database using .save()
-        // IMPORTANT OR ELSE IT WONT REFLECT SA GETMAPPING
         ParkingLot newParkingLot = this.parkingLotRepository.save(parkingLot);
         return mapToDto(newParkingLot);
     }
@@ -84,7 +82,7 @@ public class ParkingLotServiceImpl implements ParkingLotService {
         return parkingLot;
     }
 
-    //convert entity (post) to DTO
+    //convert entity to DTO
     private ParkingLotDto mapToDto(ParkingLot parkingLot){
 
         ParkingLotDto parkingLotDto = mapper.map(parkingLot, ParkingLotDto.class);

@@ -1,16 +1,15 @@
 package com.springboot.parking.controller;
 
-import com.springboot.parking.payload.ParkingLotDto;
+
 import com.springboot.parking.payload.TicketDto;
 import com.springboot.parking.payload.VehicleDto;
-import com.springboot.parking.service.ParkingLotService;
 import com.springboot.parking.service.TicketService;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
-
+@CrossOrigin
 @RestController
 @RequestMapping("/api/tickets")
 public class TicketController {
@@ -29,9 +28,17 @@ public class TicketController {
 
     @PutMapping("/{id}")
     public ResponseEntity<TicketDto> unpark(@PathVariable(name = "id") long id){
+
         TicketDto ticketDto = ticketService.unpark(id);
 
         return new ResponseEntity<>(ticketDto, HttpStatus.OK);
+    }
+
+    @GetMapping("/{parkingLotId}/slots")
+    public List<TicketDto> getAllSots(
+            @PathVariable(value = "parkingLotId") long parkingLotId
+    ){
+        return ticketService.getAllTickets(parkingLotId);
     }
 
 }

@@ -20,6 +20,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.stream.Collectors;
 
 
 @Service
@@ -84,11 +85,16 @@ public class TicketServiceImpl implements TicketService {
         Slot slot = slotRepository.findById(ticket.getSlot().getId()).orElseThrow(
                 () -> new ResourceNotFoundException("Slot", "id", ticket.getSlot().getId()));
         LocalDateTime currentTime = LocalDateTime.now();
+        BigDecimal recentDue = ticket.getAmountDue();
+
+        System.out.println("Recent Due: " + recentDue);
 
         // check if 3 hours or less
         if (checkIfMinimum(ticket.getTimeIn(),currentTime)) {
+
             ticket.setTimeOut(currentTime);
-            ticket.setAmountDue(slot.getFlatRate());
+            ticket.setAmountDue(new BigDecimal(slot.getFlatRate().longValue() - recentDue.longValue()));
+            System.out.println("Minimum Amount Due " + new BigDecimal(slot.getFlatRate().longValue() - recentDue.longValue()));
 
             slot.setOccupied(false);
             this.slotRepository.save(slot);
@@ -101,7 +107,8 @@ public class TicketServiceImpl implements TicketService {
         // check if more than 24 hours
         if (checkIfWholeDay(ticket.getTimeIn(),currentTime)){
             ticket.setTimeOut(currentTime);
-            ticket.setAmountDue(computeDaily(ticket.getTimeIn(),currentTime,slot.getPerHour()));
+            ticket.setAmountDue(computeDaily(ticket.getTimeIn(),currentTime,slot.getPerHour(), recentDue));
+            System.out.println("Daily Amount Due " + computeDaily(ticket.getTimeIn(),currentTime,slot.getPerHour(), recentDue));
 
             slot.setOccupied(false);
             this.slotRepository.save(slot);
@@ -114,8 +121,8 @@ public class TicketServiceImpl implements TicketService {
 
         // if conditions above are not satisfied
         ticket.setTimeOut(currentTime);
-        ticket.setAmountDue(computeHourly(ticket.getTimeIn(),currentTime,slot.getFlatRate(),slot.getPerHour()));
-
+        ticket.setAmountDue(computeHourly(ticket.getTimeIn(),currentTime,slot.getFlatRate(),slot.getPerHour(), recentDue));
+        System.out.println("Hourly Amount Due " + computeHourly(ticket.getTimeIn(),currentTime,slot.getFlatRate(),slot.getPerHour(), recentDue));
         slot.setOccupied(false);
         this.slotRepository.save(slot);
 
@@ -123,6 +130,13 @@ public class TicketServiceImpl implements TicketService {
 
         return mapToDto(ticket);
 
+    }
+
+    @Override
+    public List<TicketDto> getAllTickets(long parkingLotId) {
+        List<Ticket> tickets = ticketRepository.findByParkingLotId(parkingLotId);
+
+        return tickets.stream().map(ticket -> mapToDto(ticket)).collect(Collectors.toList());
     }
 
     // Convert DTO to entity
@@ -158,7 +172,10 @@ public class TicketServiceImpl implements TicketService {
 
     private TicketDto generateTicket(Ticket ticket, Vehicle vehicle, boolean isReturnee){
         // find all slots within entry point and size
+        System.out.println("Properties: " + ticket.getEntryPoint() + " " +ticket.getVehicleSize());
         List<Slot> nearSlots = slotRepository.findByEntryPointAndSlotSize(ticket.getEntryPoint(), ticket.getVehicleSize());
+        System.out.println("here1");
+
         for(Slot slot : nearSlots){
 
             if (slot.getSlotSize().toString().equals(ticket.getVehicleSize()) && !slot.isOccupied()){
@@ -168,9 +185,12 @@ public class TicketServiceImpl implements TicketService {
                 // If not a 1 hour returnee, set time in as now.
                 if(!isReturnee){
                     ticket.setTimeIn(LocalDateTime.now());
+                    ticket.setAmountDue(new BigDecimal(0.00));
                 }
                 ticket.setSlot(slot);
+                ticket.setParkingLot(slot.getParkingLot());
                 ticket.setVehicle(vehicle);
+
 
                 // Save ticket to db
                 Ticket updatedTicket = this.ticketRepository.save(ticket);
@@ -188,17 +208,16 @@ public class TicketServiceImpl implements TicketService {
         /* If enhanced for loop ends and still none, check all other slots regardless of entry point
          * Also check for slots where it can fit
          */
-        List<Slot> otherSlots = slotRepository.findBySlotSize(ticket.getVehicleSize());
+        List<Slot> otherSlots = slotRepository.findAll(); //Fixed to find ALL slots
         for(Slot slot : otherSlots){
-            /*System.out.println("Other Slot:");
-            System.out.println("SlotSize: " + slot.getSlotSize());
-            System.out.println("Entry Point: " + slot.getEntryPoint());
-            System.out.println("Occupied: " + slot.isOccupied());*/
-            if (((slot.getSlotSize().equals(ticket.getVehicleSize()))
-                    || (ticket.getVehicleSize().equals(SlotSize.SP.name()) && slot.getSlotSize().equals(SlotSize.MP.name()))
-                    || (ticket.getVehicleSize().equals(SlotSize.SP.name()) && slot.getSlotSize().equals(SlotSize.LP.name()))
-                    || (ticket.getVehicleSize()==SlotSize.MP.name() && slot.getSlotSize().equals(SlotSize.LP.name())))
-                    && !slot.isOccupied()){
+            System.out.println("Ticket Properties: " + ticket.getEntryPoint() + " " +ticket.getVehicleSize());
+            System.out.println("Other slot property: " + slot.getEntryPoint() + " " + slot.getSlotSize() + " " + slot.isOccupied());
+            System.out.println("===========================================");
+            if (((slot.getSlotSize().equals(ticket.getVehicleSize()) && !slot.isOccupied())
+                    || (ticket.getVehicleSize().equals(SlotSize.SP.name()) && slot.getSlotSize().equals(SlotSize.MP.name()) && !slot.isOccupied())
+                    || (ticket.getVehicleSize().equals(SlotSize.SP.name()) && slot.getSlotSize().equals(SlotSize.LP.name())&& !slot.isOccupied())
+                    || (ticket.getVehicleSize().equals(SlotSize.MP.name()) && slot.getSlotSize().equals(SlotSize.LP.name()))&& !slot.isOccupied())
+                    ){
 
 
 
@@ -208,6 +227,7 @@ public class TicketServiceImpl implements TicketService {
                     ticket.setTimeIn(LocalDateTime.now());
                 }
                 ticket.setEntryPoint(slot.getEntryPoint()); //set new entry point of the slot
+                ticket.setParkingLot(slot.getParkingLot());
                 ticket.setSlot(slot);
                 ticket.setVehicle(vehicle);
 
@@ -256,25 +276,25 @@ public class TicketServiceImpl implements TicketService {
     }
 
     // Compute for 24 hour
-    private BigDecimal computeDaily(LocalDateTime entryDate, LocalDateTime exitDate, BigDecimal rate){
+    private BigDecimal computeDaily(LocalDateTime entryDate, LocalDateTime exitDate, BigDecimal rate, BigDecimal recentDue){
         long amount_due;
         long flat_daily = 5000;
 
         long days = ChronoUnit.DAYS.between(entryDate, exitDate);
         long hours = ChronoUnit.HOURS.between(entryDate,exitDate)%(days*24);
 
-        amount_due = (flat_daily * days) + (hours * rate.longValue());
+        amount_due = (flat_daily * days) + (hours * rate.longValue())  - recentDue.longValue();
 
         return new BigDecimal(amount_due);
     }
 
     // Compute for hourly rate
-    private BigDecimal computeHourly(LocalDateTime entryDate, LocalDateTime exitDate, BigDecimal flat_rate, BigDecimal per_hour){
+    private BigDecimal computeHourly(LocalDateTime entryDate, LocalDateTime exitDate, BigDecimal flat_rate, BigDecimal per_hour, BigDecimal recentDue){
         long amount_due;
         long hours = ChronoUnit.HOURS.between(entryDate,exitDate)-3;
 
-        amount_due = (hours * per_hour.longValue()) + flat_rate.longValue();
-
+        amount_due = (hours * per_hour.longValue()) + flat_rate.longValue() - recentDue.longValue();
+        System.out.println(recentDue);
         return new BigDecimal(amount_due);
     }
 

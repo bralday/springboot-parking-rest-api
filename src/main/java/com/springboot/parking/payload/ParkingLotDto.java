@@ -12,5 +12,6 @@ public class ParkingLotDto {
     private Long id;
     private String lotName;
     private String location;
-    private Set<SlotDto> Slots = new HashSet<>();
+    private Set<SlotDto> slots = new HashSet<>();
+    private Set<TicketDto> tickets = new HashSet<>();
 }

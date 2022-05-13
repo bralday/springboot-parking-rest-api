@@ -31,26 +31,25 @@ public class SlotServiceImpl implements SlotService {
 
     @Override
     public SlotDto createSlot(long parkingLotId, SlotDto slotDto) {
-        // Convert DTO to entity using private method below.
+
         Slot slot = mapToEntity(slotDto);
 
-        // Retrieve post entity by id
+
         ParkingLot parkingLot = parkingLotRepository.findById(parkingLotId).orElseThrow(
                 () -> new ResourceNotFoundException("Parking Lot", "id", parkingLotId));
 
-        //setPost to comment entity
+
         slot.setParkingLot(parkingLot);
 
-        // Save to database using .save()
+
         Slot newSlot = this.slotRepository.save(slot);
 
-        //convert entity (post) to DTO using private method below.
+
         return mapToDto(newSlot);
     }
 
     @Override
     public List<SlotDto> getAllSots(long parkingLotId) {
-        // retrieve comments by postId
         List<Slot> slots = slotRepository.findByParkingLotId(parkingLotId);
 
         return slots.stream().map(slot -> mapToDto(slot)).collect(Collectors.toList());
@@ -58,11 +57,11 @@ public class SlotServiceImpl implements SlotService {
 
     @Override
     public SlotDto getSlotById(long parkingLotId, long slotId) {
-        // Retrieve parking lot entity by id
+
         ParkingLot parkingLot = parkingLotRepository.findById(parkingLotId).orElseThrow(
                 () -> new ResourceNotFoundException("Parking Lot", "id", parkingLotId));
 
-        // Retrieve slot entity by id
+
         Slot slot = slotRepository.findById(slotId).orElseThrow(
                 () -> new ResourceNotFoundException("Slot", "id", slotId));
 
@@ -77,11 +76,11 @@ public class SlotServiceImpl implements SlotService {
 
     @Override
     public SlotDto updateSlot(SlotDto slotDto, long parkingLotId, long slotId) {
-        // Retrieve parkinglot entity by id
+
         ParkingLot parkingLot = parkingLotRepository.findById(parkingLotId).orElseThrow(
                 () -> new ResourceNotFoundException("Parking Lot", "id", parkingLotId));
 
-        // Retrieve slot entity by id
+
         Slot slot = slotRepository.findById(slotId).orElseThrow(
                 () -> new ResourceNotFoundException("Slot", "id", slotId));
 
@@ -127,7 +126,7 @@ public class SlotServiceImpl implements SlotService {
         return slot;
     }
 
-    //convert entity (post) to DTO
+    //convert entity to DTO
     private SlotDto mapToDto(Slot slot){
 
         SlotDto slotDto = mapper.map(slot, SlotDto.class);
