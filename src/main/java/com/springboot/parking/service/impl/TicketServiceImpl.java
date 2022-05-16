@@ -71,6 +71,7 @@ public class TicketServiceImpl implements TicketService {
         newTicket.setEntryPoint(newVehicle.getEntryPoint()); //entry point for new transaction
         newTicket.setVehicleSize(vehicle.getVehicleSize());
         newTicket.setLicenseNumber(vehicle.getLicenseNumber());
+        newTicket.setAmountDue(new BigDecimal(0.00));
 
 
         return generateTicket(newTicket,vehicle, isReturnee);
@@ -172,9 +173,8 @@ public class TicketServiceImpl implements TicketService {
 
     private TicketDto generateTicket(Ticket ticket, Vehicle vehicle, boolean isReturnee){
         // find all slots within entry point and size
-        System.out.println("Properties: " + ticket.getEntryPoint() + " " +ticket.getVehicleSize());
+        System.out.println("Generating ticket... Properties: " + ticket.getEntryPoint() + " " +ticket.getVehicleSize());
         List<Slot> nearSlots = slotRepository.findByEntryPointAndSlotSize(ticket.getEntryPoint(), ticket.getVehicleSize());
-        System.out.println("here1");
 
         for(Slot slot : nearSlots){
 
@@ -185,7 +185,6 @@ public class TicketServiceImpl implements TicketService {
                 // If not a 1 hour returnee, set time in as now.
                 if(!isReturnee){
                     ticket.setTimeIn(LocalDateTime.now());
-                    ticket.setAmountDue(new BigDecimal(0.00));
                 }
                 ticket.setSlot(slot);
                 ticket.setParkingLot(slot.getParkingLot());
@@ -275,7 +274,7 @@ public class TicketServiceImpl implements TicketService {
         return false;
     }
 
-    // Compute for 24 hour
+    // Compute for 24 hour (first 3 hours as 40p is disregarded based on my understanding)
     private BigDecimal computeDaily(LocalDateTime entryDate, LocalDateTime exitDate, BigDecimal rate, BigDecimal recentDue){
         long amount_due;
         long flat_daily = 5000;
@@ -285,6 +284,11 @@ public class TicketServiceImpl implements TicketService {
 
         amount_due = (flat_daily * days) + (hours * rate.longValue())  - recentDue.longValue();
 
+        // if exceeded a minute, counted as 1 hour
+        if(ChronoUnit.MINUTES.between(entryDate, exitDate)%(60)!=0){
+            amount_due += rate.longValue();
+        }
+
         return new BigDecimal(amount_due);
     }
 
@@ -293,8 +297,14 @@ public class TicketServiceImpl implements TicketService {
         long amount_due;
         long hours = ChronoUnit.HOURS.between(entryDate,exitDate)-3;
 
+
         amount_due = (hours * per_hour.longValue()) + flat_rate.longValue() - recentDue.longValue();
-        System.out.println(recentDue);
+
+        if(ChronoUnit.MINUTES.between(entryDate, exitDate)%(60)!=0){
+            amount_due += per_hour.longValue();
+        }
+
+
         return new BigDecimal(amount_due);
     }
 
